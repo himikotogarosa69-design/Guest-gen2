@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UID Database Admin</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <script type="module">
+        import { initializeApp } from "";
+        import { getDatabase, ref, onValue, push, remove } from "";
+        
+        const firebaseConfig = {
+            apiKey: "",
+            authDomain: "",
+            databaseURL: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: "",
+            measurementId: ""
+        };
+        
+        window.firebaseConfig = firebaseConfig;
+        window.firebaseModules = { initializeApp, getDatabase, ref, onValue, push, remove };
+    </script>
+</head>
+<body>
+    <!-- Password Prompt Popup -->
+    <div class="password-popup" id="password-popup">
+        <div class="password-popup-content">
+            <h3><ion-icon name="lock-closed-outline"></ion-icon> Enter Admin Password</h3>
+            <p id="password-action-text">Please enter admin password to continue</p>
+            <div class="password-input-group">
+                <input type="password" id="password-input" placeholder="Enter admin password" autocomplete="off">
+                <button class="password-toggle" type="button" id="password-toggle">
+                    <ion-icon name="eye-outline"></ion-icon>
+                </button>
+            </div>
+            <p class="password-hint">Default password: <code>KRN</code></p>
+            <div class="password-popup-actions">
+                <button class="btn btn-secondary" id="password-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="password-submit-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Copy Data Popup -->
+    <div class="copy-popup" id="copy-popup">
+        <div class="copy-popup-content">
+            <h3><ion-icon name="copy-outline"></ion-icon> Copy Account Data</h3>
+            <div class="copy-data-preview" id="copy-data-preview"></div>
+            <div class="copy-popup-actions">
+                <button class="btn btn-secondary" id="copy-cancel-btn">Close</button>
+                <button class="btn btn-primary" id="copy-confirm-btn">
+                    <ion-icon name="copy-outline"></ion-icon> Copy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Alert Container -->
+        <div id="alert" class="alert"></div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>UID Database Admin</h1>
+            <div class="header-actions">
+                <button class="icon-btn" id="refresh-btn" title="Refresh">
+                    <ion-icon name="refresh-outline"></ion-icon>
+                </button>
+                <button class="icon-btn" id="settings-btn" title="Settings">
+                    <ion-icon name="settings-outline"></ion-icon>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <ion-icon name="people-outline"></ion-icon>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-accounts">0</div>
+                    <div class="stat-title">Total Accounts</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <ion-icon name="time-outline"></ion-icon>
+                <div class="stat-content">
+                    <div class="stat-value" id="last-updated">-</div>
+                    <div class="stat-title">Last Updated</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <ion-icon name="checkmark-circle-outline"></ion-icon>
+                <div class="stat-content">
+                    <div class="stat-value" id="rare-accounts">0</div>
+                    <div class="stat-title">Rare UIDs</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <ion-icon name="cloud-upload-outline"></ion-icon>
+                <div class="stat-content">
+                    <div class="stat-value" id="file-accounts">0</div>
+                    <div class="stat-title">File Accounts</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search by Account ID, UID or Password...">
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="upload-section">
+            <div class="upload-area" id="upload-area">
+                <ion-icon name="cloud-upload-outline"></ion-icon>
+                <h3>Drag & Drop or Click to Upload</h3>
+                <p>Supported formats: JSON with account_id, uid, password, rare_types</p>
+                <p>Max file size: 10MB</p>
+                <input type="file" id="file-input" accept=".json,.txt" style="display: none;">
+            </div>
+            <div class="file-info" id="file-info">
+                <div class="file-details">
+                    <p><strong>File:</strong> <span id="file-name">No file selected</span></p>
+                    <p><strong>Size:</strong> <span id="file-size">-</span></p>
+                    <p><strong>Accounts:</strong> <span id="accounts-found">0</span></p>
+                </div>
+                <div class="file-actions">
+                    <button class="btn btn-danger" id="clear-file-btn">
+                        <ion-icon name="close-outline"></ion-icon> Clear
+                    </button>
+                </div>
+            </div>
+            <div class="progress-container" id="progress-container">
+                <div class="progress-header">
+                    <span>Uploading to Firebase...</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-stats">
+                    <span id="processed-count">0</span> of <span id="total-count">0</span> accounts
+                </div>
+            </div>
+            <button class="process-btn" id="process-btn" disabled>
+                <ion-icon name="cloud-upload-outline"></ion-icon> Upload to Firebase
+            </button>
+        </div>
+
+        <!-- Accounts Table -->
+        <div class="table-container">
+            <table id="data-table">
+                <thead>
+                    <tr>
+                        <th>Account ID</th>
+                        <th>UID</th>
+                        <th>Password</th>
+                        <th>Rare Types</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr>
+                        <td colspan="5" class="loader"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+            <button class="pagination-btn" id="prev-btn" disabled>
+                <ion-icon name="chevron-back-outline"></ion-icon>
+            </button>
+            <span id="page-info">Page 1</span>
+            <button class="pagination-btn" id="next-btn" disabled>
+                <ion-icon name="chevron-forward-outline"></ion-icon>
+            </button>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settings-panel">
+            <h3>Settings 
+                <button class="close-btn" id="close-settings-btn">
+                    <ion-icon name="close-outline"></ion-icon>
+                </button>
+            </h3>
+            <div class="settings-group">
+                <label>Rows per page</label>
+                <select id="rows-per-page">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="settings-group">
+                <label>Auto-refresh</label>
+                <select id="auto-refresh">
+                    <option value="0">Off</option>
+                    <option value="5000">5 seconds</option>
+                    <option value="10000">10 seconds</option>
+                    <option value="30000">30 seconds</option>
+                </select>
+            </div>
+            <div class="settings-group">
+                <label>Table Density</label>
+                <select id="table-density">
+                    <option value="normal">Normal</option>
+                    <option value="compact">Compact</option>
+                    <option value="spacious">Spacious</option>
+                </select>
+            </div>
+            <div class="settings-group">
+                <button class="btn btn-danger" id="clear-all-btn" style="width: 100%;">
+                    <ion-icon name="trash-outline"></ion-icon> Delete All Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
